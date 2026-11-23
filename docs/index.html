@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>올팍 공연일 주차 내비</title>
+<meta name="description" content="올림픽공원 공연일 주차 혼잡과 공연 후 출차 대기를 공공데이터로 예측해 도착·출발 시각과 출구를 안내합니다.">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#f6f7f9; --card:#fff; --ink:#1b1f24; --sub:#5b6470; --line:#e3e6ea;
+  --accent:#1f6feb; --warn:#d1495b; --ok:#2a9d8f; --soft:#eef4ff;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#0f1216; --card:#171b21; --ink:#e8ebef; --sub:#9aa4b1; --line:#2a3039; --accent:#5b9dff; --warn:#ff6b7d; --ok:#4cc9b0; --soft:#1a2433; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 "Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif}
+header{padding:28px 16px 8px;max-width:980px;margin:0 auto}
+header h1{margin:0;font-size:24px}
+header p{margin:6px 0 0;color:var(--sub)}
+main{max-width:980px;margin:0 auto;padding:8px 16px 48px;display:grid;gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
+.card h2{margin:0 0 12px;font-size:17px}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+label{display:block;font-size:13px;color:var(--sub);margin-bottom:4px}
+input,select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--ink);font:inherit}
+button{padding:10px 16px;border:0;border-radius:9px;background:var(--accent);color:#fff;font:inherit;font-weight:600;cursor:pointer}
+.kpis{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.kpi{background:var(--soft);border-radius:12px;padding:14px}
+.kpi .t{font-size:13px;color:var(--sub)}
+.kpi .v{font-size:24px;font-weight:700;margin-top:2px}
+.kpi .d{font-size:13px;color:var(--sub);margin-top:4px}
+.live{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.live .v{font-size:28px;font-weight:700}
+.muted{color:var(--sub);font-size:13px}
+.chart-wrap{position:relative;height:300px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:7px 6px;border-bottom:1px solid var(--line);text-align:left}
+th{color:var(--sub);font-weight:600}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;background:var(--soft)}
+footer{max-width:980px;margin:0 auto;padding:0 16px 32px;color:var(--sub);font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>올팍 공연일 주차 내비</h1>
+  <p>올림픽공원 공연 날, 언제 도착하고 언제 출발하면 덜 막히는지 공공데이터로 미리 알려드립니다.</p>
+</header>
+<main>
+  <section class="card">
+    <h2>지금 올림픽공원 주차</h2>
+    <div class="live"><span class="v" id="liveCount">-</span><span class="muted" id="liveNote">불러오는 중…</span></div>
+  </section>
+
+  <section class="card">
+    <h2>공연 정보 입력</h2>
+    <div class="grid">
+      <div><label for="date">관람 날짜</label><input type="date" id="date"></div>
+      <div><label for="venue">공연장</label><select id="venue"></select></div>
+      <div><label for="start">시작 시각</label><input type="time" id="start" value="18:00"></div>
+      <div><label for="dur">공연 시간(분)</label><input type="number" id="dur" value="150" min="30" step="10"></div>
+      <div><label for="aud">예상 관객 수</label><input type="number" id="aud" min="100" step="100"></div>
+    </div>
+    <p class="muted" id="audHint"></p>
+    <button id="go">예측하기</button>
+  </section>
+
+  <section class="card" id="result" hidden>
+    <h2>예측 결과</h2>
+    <div class="kpis">
+      <div class="kpi"><div class="t">권장 도착</div><div class="v" id="kArrive">-</div><div class="d" id="kArriveD"></div></div>
+      <div class="kpi"><div class="t">공연 직후 출차 러시</div><div class="v" id="kWait">-</div><div class="d" id="kWaitD"></div></div>
+      <div class="kpi"><div class="t">덜 막히는 출발 시각</div><div class="v" id="kLeave">-</div><div class="d" id="kLeaveD"></div></div>
+      <div class="kpi"><div class="t">추천 출구</div><div class="v" id="kGate">-</div><div class="d" id="kGateD"></div></div>
+    </div>
+    <p class="muted" id="basis" style="margin-top:12px"></p>
+    <div class="chart-wrap" style="margin-top:8px"><canvas id="chart"></canvas></div>
+    <p class="muted">막대: 15분마다 빠져나가는 예상 차량 수. 회색 선: 공연이 없는 같은 달·요일 유형의 평소 수준.</p>
+  </section>
+
+  <section class="card">
+    <h2>2025년 실제 공연일로 검증</h2>
+    <p class="muted">2025년 입출차 기록 240만 건에서 공연일 출차 러시를 찾아 모델을 만들었습니다. 날짜를 고르면 그날 실제 출차와 모델 예측을 겹쳐 봅니다.</p>
+    <select id="replay"></select>
+    <div class="chart-wrap" style="margin-top:12px"><canvas id="chart2"></canvas></div>
+    <p class="muted" id="replayNote"></p>
+    <p class="muted" id="validation"></p>
+  </section>
+</main>
+<footer>
+  데이터: 한국체육산업개발(주) 올림픽공원 2025 입출차정보·차량입출차·공연·날씨 연계 데이터·공연정보·실시간 주차현황 (문화공공데이터광장, 공공데이터포털). 예측은 참고용입니다.
+</footer>
+<script src="app.js"></script>
+</body>
+</html>
