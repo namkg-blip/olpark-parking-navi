@@ -1,0 +1,12 @@
+# 비공개: API 키, 원본·중간 데이터, 제출 서류(개인정보), 작업 메모
+.env
+/data/
+proposal/
+reports/
+PLAN.md
+*.hwp
+안내문.txt
+/eda_*.csv
+__pycache__/
+*.pyc
+
