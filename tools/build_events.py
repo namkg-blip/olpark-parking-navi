@@ -8,12 +8,15 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parent.parent
 lk = json.loads((ROOT / "data" / "raw" / "KEY_LINKED_2025" / "p00001.json").read_text(encoding="utf-8"))
 
+# 공연명 안에 줄바꿈이 들어 있는 행이 있어 re.S 로 줄바꿈까지 공연명으로 읽고, 공백은 하나로 줄인다
+# 공연명의 둥근 따옴표는 곧은 따옴표로 통일(표기만, 수치 영향 없음)
+QUOTES = str.maketrans({0x2018: "'", 0x2019: "'", 0x201C: '"', 0x201D: '"'})
 rows = []
 for x in lk:
-    m = re.match(r"공연명:(.*),공연관람객수:(\d+)", x["TITLE"])
+    m = re.match(r"공연명:(.*),공연관람객수:(\d+)", x["TITLE"], re.S)
     if not m or not m.group(1).strip():
         continue
-    rows.append({"ts": pd.Timestamp(x["ISSUED_DATE"]), "event": m.group(1).strip(), "audience": int(m.group(2))})
+    rows.append({"ts": pd.Timestamp(x["ISSUED_DATE"]), "event": " ".join(m.group(1).split()).translate(QUOTES), "audience": int(m.group(2))})
 df = pd.DataFrame(rows)
 df["date"] = df["ts"].dt.date
 
