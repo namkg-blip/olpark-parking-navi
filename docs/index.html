@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>올팍 공연일 주차 내비</title>
-<meta name="description" content="올림픽공원 공연일 주차 혼잡과 공연 후 출차 대기를 공공데이터로 예측해 도착·출발 시각과 출구를 안내합니다.">
+<meta name="description" content="올림픽공원 공연일 주차 혼잡과 공연 후 출차 러시를 공공데이터로 예측해 도착·출발 시각을 안내하고, 어느 문으로 들어가면 어느 문으로 나오는지 알려 줍니다.">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 :root{
@@ -45,51 +45,80 @@ footer{max-width:980px;margin:0 auto;padding:0 16px 32px;color:var(--sub);font-s
 <body>
 <header>
   <h1>올팍 공연일 주차 내비</h1>
-  <p>올림픽공원 공연 날, 언제 도착하고 언제 출발하면 덜 막히는지 공공데이터로 미리 알려드립니다.</p>
+  <p>올림픽공원 공연 날, 언제 도착하고 언제 출발하면 덜 막히는지 공공데이터로 미리 알려드립니다. 예측은 평일 공연일만 하고, 주말은 2025년 주말 공연일 실측을 보여 드립니다.</p>
 </header>
 <main>
   <section class="card">
-    <h2>지금 올림픽공원 주차</h2>
-    <div class="live"><span class="v" id="liveCount">-</span><span class="muted" id="liveNote">불러오는 중…</span></div>
+    <h2>지금 동2·남2·북2문 구역 주차</h2>
+    <div class="live"><span class="v" id="liveCount">-</span><span class="muted" id="liveNote">불러오는 중</span></div>
+    <p class="muted" id="liveScope" style="margin:8px 0 0"></p>
   </section>
 
   <section class="card">
     <h2>공연 정보 입력</h2>
     <div class="grid">
       <div><label for="date">관람 날짜</label><input type="date" id="date"></div>
-      <div><label for="venue">공연장</label><select id="venue"></select></div>
+      <div><label for="venue">공연장 (관객 수 기본값용)</label><select id="venue"></select></div>
       <div><label for="start">시작 시각</label><input type="time" id="start" value="18:00"></div>
       <div><label for="dur">공연 시간(분)</label><input type="number" id="dur" value="150" min="30" step="10"></div>
-      <div><label for="aud">예상 관객 수</label><input type="number" id="aud" min="100" step="100"></div>
+      <div><label for="aud">예상 관객 수 (같은 시간대 공연 합계)</label><input type="number" id="aud" min="100" step="100"></div>
     </div>
     <p class="muted" id="audHint"></p>
     <button id="go">예측하기</button>
   </section>
 
   <section class="card" id="result" hidden>
-    <h2>예측 결과</h2>
+    <h2 id="resultTitle">예측 결과</h2>
     <div class="kpis">
-      <div class="kpi"><div class="t">권장 도착</div><div class="v" id="kArrive">-</div><div class="d" id="kArriveD"></div></div>
-      <div class="kpi"><div class="t">공연 직후 출차 러시</div><div class="v" id="kWait">-</div><div class="d" id="kWaitD"></div></div>
-      <div class="kpi"><div class="t">덜 막히는 출발 시각</div><div class="v" id="kLeave">-</div><div class="d" id="kLeaveD"></div></div>
-      <div class="kpi"><div class="t">추천 출구</div><div class="v" id="kGate">-</div><div class="d" id="kGateD"></div></div>
+      <div class="kpi"><div class="t" id="kT1"></div><div class="v" id="kV1">-</div><div class="d" id="kD1"></div></div>
+      <div class="kpi"><div class="t" id="kT2"></div><div class="v" id="kV2">-</div><div class="d" id="kD2"></div></div>
+      <div class="kpi"><div class="t" id="kT3"></div><div class="v" id="kV3">-</div><div class="d" id="kD3"></div></div>
+      <div class="kpi" id="k4"><div class="t" id="kT4"></div><div class="v" id="kV4">-</div><div class="d" id="kD4"></div></div>
+    </div>
+    <div id="slotWrap" style="overflow-x:auto;margin-top:12px" hidden>
+      <table><thead id="slotHead"></thead><tbody id="slotBody"></tbody></table>
+      <p class="muted" id="slotNote" style="margin:6px 0 0"></p>
     </div>
     <p class="muted" id="basis" style="margin-top:12px"></p>
     <div class="chart-wrap" style="margin-top:8px"><canvas id="chart"></canvas></div>
-    <p class="muted">막대: 15분마다 빠져나가는 예상 차량 수. 회색 선: 공연이 없는 같은 달·요일 유형의 평소 수준.</p>
+    <p class="muted" id="chartNote"></p>
+  </section>
+
+  <section class="card">
+    <h2>들어간 문으로 나옵니다</h2>
+    <p class="muted">2025년 기록을 보면 서2·서1·남3·남4문으로 들어간 차는 99.78% 이상이 들어간 문으로 나왔고, 동2·북2·남2문으로 들어간 차는 세 문 사이에서 섞여 나왔습니다. 세 문 구역에서 서2문 등 다른 구역 문으로 나간 차는 거의 없어, 나갈 수 있는 문은 들어갈 때 고른 문에 따라 정해집니다.</p>
+    <div style="overflow-x:auto">
+    <table>
+      <thead><tr><th>들어간 문</th><th>나올 때 쓴 문 (2025년)</th><th>공연일 저녁 15분 출차 최고 (평일, 괄호는 평소 대비 / 주말)</th><th>공연 없는 평일</th></tr></thead>
+      <tbody id="gateRows"></tbody>
+    </table>
+    </div>
+    <p class="muted" id="gateMixed" style="margin-top:12px"></p>
+    <p class="muted" id="gateDef"></p>
   </section>
 
   <section class="card">
     <h2>2025년 실제 공연일로 검증</h2>
-    <p class="muted">2025년 입출차 기록 240만 건에서 공연일 출차 러시를 찾아 모델을 만들었습니다. 날짜를 고르면 그날 실제 출차와 모델 예측을 겹쳐 봅니다.</p>
+    <p class="muted" id="valIntro"></p>
     <select id="replay"></select>
     <div class="chart-wrap" style="margin-top:12px"><canvas id="chart2"></canvas></div>
     <p class="muted" id="replayNote"></p>
-    <p class="muted" id="validation"></p>
+    <div style="overflow-x:auto">
+    <table>
+      <thead><tr><th>교차검증 (평일)</th><th>러시 지속 15분 이내</th><th>지속 오차 중앙값</th><th>최고점 오차 중앙값 (시각을 아는 조건)</th><th>최고점 오차 중앙값 (모르는 조건)</th><th>15분 구간 평균 오차: 아는 조건 / 모르는 조건 / 평소대로 예측</th><th>최고점 시각 오차 중앙값 (모르는 조건)</th></tr></thead>
+      <tbody id="valRows"></tbody>
+    </table>
+    </div>
+    <p class="muted" id="validation" style="margin-top:12px"></p>
+  </section>
+
+  <section class="card">
+    <h2>근거와 한계</h2>
+    <ul class="muted" id="limits" style="margin:0;padding-left:18px"></ul>
   </section>
 </main>
 <footer>
-  데이터: 한국체육산업개발(주) 올림픽공원 2025 입출차정보·차량입출차·공연·날씨 연계 데이터·공연정보·실시간 주차현황 (문화공공데이터광장, 공공데이터포털). 예측은 참고용입니다.
+  예측에 쓴 데이터: 한국체육산업개발(주) 올림픽공원 2025 입출차정보, 2025 차량입출차·공연·날씨 연계 데이터(공연일과 관람객 수만 사용, 날씨 항목은 비어 있어 쓰지 못함). 화면 표시만 하고 예측에 쓰지 않는 데이터: 실시간 주차현황. 탐색만 한 데이터: 올림픽공원 공연정보·대관정보 등(문화공공데이터광장, 공공데이터포털). 예측은 참고용입니다.
 </footer>
 <script src="app.js"></script>
 </body>
